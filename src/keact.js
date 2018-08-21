@@ -1,4 +1,3 @@
-/** @jsx createElement */
 function render(element, parent) {
     let dom;
     console.log({element})

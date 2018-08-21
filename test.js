@@ -1,5 +1,5 @@
 /** @jsx createElement */
-import Keact, {createElement} from './keact';
+import Keact, {createElement} from './src/keact';
 
 const root = document.getElementById('root');
 const elem = (
