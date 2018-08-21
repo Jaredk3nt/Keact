@@ -1,0 +1,26 @@
+{
+  "name": "keact",
+  "version": "1.0.0",
+  "description": "My 'react' clone",
+  "main": "index.js",
+  "scripts": {
+    "webpack": "webpack --mode='development'"
+  },
+  "keywords": [
+    "react-clone",
+    "framework"
+  ],
+  "author": "Jared K Jones",
+  "license": "ISC",
+  "devDependencies": {
+    "babel-core": "^6.26.3",
+    "babel-loader": "^7.1.5",
+    "babel-plugin-transform-jsx": "^2.0.0",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-plugin-transform-react-jsx": "^6.24.1",
+    "babel-preset-env": "^1.7.0",
+    "path": "^0.12.7",
+    "webpack": "^4.16.5",
+    "webpack-cli": "^3.1.0"
+  }
+}
