@@ -1,35 +1,121 @@
-// function render(element, parent) {
-//   let dom;
-//   console.log({ element });
-//   if (typeof element === "string") {
-//     dom = document.createTextNode(element);
-//   } else {
-//     const { type, props, children } = element;
+let nextUnitOfWork = null;
+let currentRoot = null;
+let wipRoot = null;
+let deletions = null;
 
-//     dom = document.createElement(type);
-//     const propsObj = props || {};
-//     const isListener = name => name.startsWith("on");
-//     Object.keys(propsObj)
-//       .filter(isListener)
-//       .forEach(name => {
-//         const eventType = name.toLowerCase().substring(2);
-//         dom.addEventListener(eventType, propsObj[name]);
-//       });
+// Sets up the initial state of the program when the user instatiates a dom tree
+function render(element, container) {
+  wipRoot = {
+    dom: container,
+    props: {
+      children: [element]
+    },
+    alernate: currentRoot
+  };
+  deletions = [];
+  nextUnitOfWork = wipRoot;
+}
 
-//     const isAttribute = name => !isListener(name);
-//     Object.keys(propsObj)
-//       .filter(isAttribute)
-//       .forEach(name => {
-//         dom[name] = propsObj[name];
-//       });
+// Core function of the program, keeps everything moving
+function workLoop(deadline) {
+  let shouldYield = false;
+  while (nextUnitOfWork && !shouldYield) {
+    console.log({ nextUnitOfWork });
+    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    shouldYield = deadline.timeRemaining() < 1;
+  }
 
-//     const childElements = children || [];
-//     childElements.forEach(childElement => render(childElement, dom));
-//   }
-//   console.log({ dom });
-//   parent.appendChild(dom);
-// }
+  if (!nextUnitOfWork && wipRoot) {
+    commitRoot();
+  }
 
+  requestIdleCallback(workLoop);
+}
+
+function performUnitOfWork(fiber) {
+  const isFuncComponent = fiber.type instanceof Function;
+  if (isFuncComponent) {
+    updateFunctionComponent(fiber);
+  } else {
+    updateHostComponent(fiber);
+  }
+
+  if (fiber.child) {
+    return fiber.child;
+  }
+
+  let nextFiber = fiber;
+  while (nextFiber) {
+    if (nextFiber.sibling) {
+      return nextFiber.sibling;
+    }
+    nextFiber = nextFiber.parent;
+  }
+}
+
+let wipFiber = null;
+let hookIndex = null;
+
+function updateFunctionComponent(fiber) {
+  wipFiber = fiber;
+  hookIndex = 0;
+  wipFiber.hooks = [];
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children);
+}
+
+function useState(initial) {
+  const oldHook =
+    wipFiber.alernate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: []
+  };
+
+  const actions = oldHook ? oldHook.queue : [];
+  actions.forEach(action => {
+    console.log(hook.state);
+    hook.state = action(hook.state);
+    console.log(hook.state);
+  });
+
+  const setState = (action) => {
+    console.log(action);
+    hook.queue.push(action);
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot
+    };
+    nextUnitOfWork = wipRoot;
+    deletions = [];
+  }
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return [hook.state, setState];
+}
+
+function updateHostComponent(fiber) {
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber);
+  }
+  reconcileChildren(fiber, fiber.props.children);
+}
+
+function createDom(fiber) {
+  const dom =
+    fiber.type == "TEXT_ELEMENT"
+      ? document.createTextNode("")
+      : document.createElement(fiber.type);
+
+  updateDom(dom, {}, fiber.props);
+
+  return dom;
+}
+// Helper functions for createDom function
 function createElement(type, props = {}, ...children) {
   return {
     type,
@@ -41,7 +127,6 @@ function createElement(type, props = {}, ...children) {
     }
   };
 }
-
 function createTextElement(text) {
   return {
     type: "TEXT_ELEMENT",
@@ -52,50 +137,151 @@ function createTextElement(text) {
   };
 }
 
-function render(element, container) {
-  let dom;
-  // Determine type of node to create
-  switch (element.type) {
-    case "TEXT_ELEMENT":
-      dom = document.createTextNode("");
-      break;
-    default:
-      dom = document.createElement(element.type);
-      element.props.children.forEach(child => render(child, dom));
+function reconcileChildren(wipFiber, elements) {
+  let index = 0;
+  let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
+  let prevSibling = null;
+
+  while (index < elements.length || oldFiber != null) {
+    const element = elements[index];
+    let newFiber = null;
+
+    const sameType = oldFiber && element && element.type == oldFiber.type;
+    // Update node if same
+    if (sameType) {
+      newFiber = {
+        type: oldFiber.type,
+        props: element.props,
+        dom: oldFiber.dom,
+        parent: wipFiber,
+        alternate: oldFiber,
+        effectTag: "UPDATE"
+      };
+    }
+    // Add new node
+    if (element && !sameType) {
+      newFiber = {
+        type: element.type,
+        props: element.props,
+        dom: null,
+        parent: wipFiber,
+        alternate: null,
+        effectTag: "PLACEMENT"
+      };
+    }
+    // Delete oldFiber node
+    if (oldFiber && !sameType) {
+      oldFiber.effectTag = "DELETION";
+      deletions.push(oldFiber);
+    }
+
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling;
+    }
+
+    if (index === 0) {
+      wipFiber.child = newFiber;
+    } else {
+      prevSibling.sibling = newFiber;
+    }
+
+    prevSibling = newFiber;
+    index++;
   }
-  // Attach HTML properties to the node
-  Object.keys(element.props)
-    .filter(isHtmlProp)
+}
+
+function commitRoot() {
+  deletions.forEach(commitWork);
+  commitWork(wipRoot.child);
+  currentRoot = wipRoot;
+  wipRoot = null;
+}
+
+function commitWork(fiber) {
+  if (!fiber) {
+    return;
+  }
+
+  let domParentFiber = fiber.parent;
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
+  }
+  const domParent = domParentFiber.dom;
+
+  if (fiber.effectTag === "PLACEMENT" && fiber.dom != null) {
+    domParent.appendChild(fiber.dom);
+  } else if (fiber.effectTag === "UPDATE" && fiber.dom != null) {
+    updateDom(fiber.dom, fiber.alternate.props, fiber.props);
+  } else if (fiber.effectTag === "DELETION") {
+    commitDeletion(fiber, domParent);
+  }
+
+  commitWork(fiber.child);
+  commitWork(fiber.sibling);
+}
+
+function commitDeletion(fiber, domParent) {
+  if (fiber.dom) {
+    domParent.removeChild(fiber.dom);
+  } else {
+    commitDeletion(fiber.child, domParent);
+  }
+}
+
+function updateDom(dom, prevProps, nextProps) {
+  // Remove event listeners
+  Object.keys(prevProps)
+    .filter(isEvent)
+    .filter(key => !(key in nextProps) || isNew(prevProps, nextProps)(key))
     .forEach(name => {
-      dom[name] = element.props[name];
+      const eventType = getEventType(name);
+      dom.removeEventListener(eventType, prevProps[name]);
     });
-  // Attach node to the container
-  container.appendChild(dom);
+  // Remove old
+  Object.keys(prevProps)
+    .filter(isProperty)
+    .filter(isGone(prevProps, nextProps))
+    .forEach(name => (dom[name] = ""));
+
+  // Set new
+  Object.keys(nextProps)
+    .filter(isProperty)
+    .filter(isNew(prevProps, nextProps))
+    .forEach(name => (dom[name] = nextProps[name]));
+
+  // Add event listeners
+  Object.keys(nextProps)
+    .filter(isEvent)
+    .filter(isNew(prevProps, nextProps))
+    .forEach(name => {
+      const eventType = getEventType(name);
+      dom.addEventListener(eventType, nextProps[name]);
+    });
+}
+// Util functions to help updateDom
+function isEvent(key) {
+  return key.startsWith("on");
+}
+function isProperty(key) {
+  return key !== "children" && !isEvent(key);
+}
+function isNew(prev, next) {
+  return key => prev[key] !== next[key];
+}
+function isGone(prev, next) {
+  return key => !key in next;
+}
+function getEventType(event) {
+  return event.toLowerCase().substring(2);
 }
 
-function isHtmlProp(key) {
-  return key !== "children";
-}
-
-let nextUnitOfWork = null;
-function workLoop(deadline) {
-  let shouldYield = false;
-  while (nextUnitOfWork && !shouldYield) {
-    nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
-    shouldYield = deadline.timeRemaining() < 1;
-  }
-  requestIdleCallback(workLoop);
-}
-
+// Begin running program
 requestIdleCallback(workLoop);
-
-function performUnitOfWork(nextWork) {
-
-}
 
 export default {
   createElement,
-  render
+  render,
+  useState
 };
 
-export { createElement, render };
+export { createElement, render, useState };
