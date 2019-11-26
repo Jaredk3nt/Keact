@@ -6,6 +6,9 @@ function App(props) {
   return (
     <div>
       <h1>Count: {state}</h1>
+      <button onClick={() => setState(2)}>2</button>
+      <button onClick={() => setState(3)}>3</button>
+      <button onClick={() => setState(4)}>4</button>
       <button onClick={() => setState(c => c+1)}>+</button>
     </div>
   );

@@ -5,6 +5,7 @@ let deletions = null;
 
 // Sets up the initial state of the program when the user instatiates a dom tree
 function render(element, container) {
+  // Create root node and pass in initial values
   wipRoot = {
     dom: container,
     props: {
@@ -13,17 +14,19 @@ function render(element, container) {
     alternate: currentRoot
   };
   deletions = [];
+  // Start the work loop by assigning root to next
   nextUnitOfWork = wipRoot;
 }
 
 // Core function of the program, keeps everything moving
 function workLoop(deadline) {
   let shouldYield = false;
+  // As long as there is something to work on keep going
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     shouldYield = deadline.timeRemaining() < 1;
   }
-
+  // If the work loop has finished we have finished updating the tree and can commit
   if (!nextUnitOfWork && wipRoot) {
     commitRoot();
   }
@@ -75,7 +78,11 @@ function useState(initial) {
 
   const actions = oldHook ? oldHook.queue : [];
   actions.forEach(action => {
-    hook.state = action(hook.state);
+    if (action instanceof Function) {
+      hook.state = action(hook.state);
+    } else {
+      hook.state = action;
+    }
   });
 
   const setState = (action) => {
