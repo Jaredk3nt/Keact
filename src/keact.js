@@ -10,7 +10,7 @@ function render(element, container) {
     props: {
       children: [element]
     },
-    alernate: currentRoot
+    alternate: currentRoot
   };
   deletions = [];
   nextUnitOfWork = wipRoot;
@@ -20,7 +20,6 @@ function render(element, container) {
 function workLoop(deadline) {
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
-    console.log({ nextUnitOfWork });
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     shouldYield = deadline.timeRemaining() < 1;
   }
@@ -66,7 +65,7 @@ function updateFunctionComponent(fiber) {
 
 function useState(initial) {
   const oldHook =
-    wipFiber.alernate &&
+    wipFiber.alternate &&
     wipFiber.alternate.hooks &&
     wipFiber.alternate.hooks[hookIndex];
   const hook = {
@@ -76,13 +75,10 @@ function useState(initial) {
 
   const actions = oldHook ? oldHook.queue : [];
   actions.forEach(action => {
-    console.log(hook.state);
     hook.state = action(hook.state);
-    console.log(hook.state);
   });
 
   const setState = (action) => {
-    console.log(action);
     hook.queue.push(action);
     wipRoot = {
       dom: currentRoot.dom,
@@ -181,7 +177,7 @@ function reconcileChildren(wipFiber, elements) {
 
     if (index === 0) {
       wipFiber.child = newFiber;
-    } else {
+    } else if (element) {
       prevSibling.sibling = newFiber;
     }
 
